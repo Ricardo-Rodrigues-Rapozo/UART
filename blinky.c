@@ -1,90 +1,41 @@
 #include <stdint.h>
 #include <stdbool.h>
+#include <math.h>
 #include "inc/hw_memmap.h"
-#include "inc/hw_types.h"
-#include "driverlib/gpio.h"
-#include "driverlib/pin_map.h"
 #include "driverlib/sysctl.h"
+#include "driverlib/gpio.h"
 #include "driverlib/uart.h"
-#include "inc/hw_ints.h"
-#include "driverlib/interrupt.h"
-//
-// -------------------------- Variaveis Globais ------------------------------------------------------
-//
+#include "driverlib/pin_map.h"
 
-uint32_t ui32SysClkFreq;
-volatile uint32_t flag = 0; // Declare como volatile para indicar que pode mudar em interrupções
-char buffer[32]; // Buffer para armazenar até 32 caracteres
-char* ptr = buffer; // ptr aponta para o início do buffer
-int inteiro; // Declara uma variável inteira
+#define A 127          // Amplitude (max: 255)
+#define F 1            // FrequÃªncia em Hz
+#define SAMPLING_RATE 100 // Taxa de amostragem em Hz
 
-//
-// -------------------------- Uart interrupt ------------------------------------------------------
-//
-void UARTIntHandler(void)// entra aqui quando recebe ou envia dados rx ou tx
-{
-flag = 1;
-uint32_t ui32Status;
-ui32Status = UARTIntStatus(UART0_BASE, true); //get interrupt status
-UARTIntClear(UART0_BASE, ui32Status); //clear the asserted interrupts
-while(UARTCharsAvail(UART0_BASE)) //loop while there are chars
-{
-UARTCharPutNonBlocking(UART0_BASE, UARTCharGetNonBlocking(UART0_BASE)); // echo
-}
-}
+uint32_t g_ui32SysClock;
 
-int main(void)
-{
-//
-// -------------------------- Definindo o CLK ------------------------------------------------------
-//
-ui32SysClkFreq = SysCtlClockFreqSet((SYSCTL_XTAL_25MHZ | SYSCTL_OSC_MAIN | SYSCTL_USE_PLL | SYSCTL_CFG_VCO_480), 120000000); // Variavel para armazenar a frequenci de clk do sistema
-//
-// -------------------------- Habilitando os perifericos ------------------------------------------------------
-//
-SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
-SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
-SysCtlPeripheralEnable(SYSCTL_PERIPH_GPION);
-//
-// -------------------------- Configurações do GPIO ------------------------------------------------------
-//
-GPIOPinTypeGPIOOutput(GPIO_PORTN_BASE, GPIO_PIN_0|GPIO_PIN_1);
-//
-// -------------------------- Configurações do GPIO para UART ------------------------------------------------------
-//
-GPIOPinConfigure(GPIO_PA0_U0RX);
-GPIOPinConfigure(GPIO_PA1_U0TX);
-GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
-//
-// -------------------------- Configuração da UART ------------------------------------------------------
-//
-UARTConfigSetExpClk(UART0_BASE, ui32SysClkFreq, 115200,(UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
-IntMasterEnable();
-IntEnable(INT_UART0);
-UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT);
+int main(void) {
+    g_ui32SysClock = SysCtlClockFreqSet((SYSCTL_XTAL_25MHZ | SYSCTL_OSC_MAIN | SYSCTL_USE_PLL | SYSCTL_CFG_VCO_240), 120000000);
 
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
 
-//
-// --------------------------   Loop Infinito para Recepção de Dados ------------------------------------------------------
-//
-while (1)
-{
-    //Um loop infinito que verifica se há caracteres disponíveis para leitura na UART.
-    //Se houver, o caractere é recebido e imediatamente enviado de volta pela UART,
-    //funcionando como um eco.
-//    if (flag == 1) {
-//        ptr = buffer; // Reseta o ponteiro para o início do buffer
-////        for (int i = 0; i < 31; i++)
-////        {
-////            *ptr = UARTCharGet(UART0_BASE); // Lê um caractere da UART
-////            if (*ptr == '\0') { // Se a leitura for nula, sai do loop
-////                break; // Interrompe se encontrar o final que é a leitura do final de envio de dados
-////            }
-////            ptr++; // Move para a próxima posição no buffer
-////        }
-//        *ptr = '\0'; // Termina o buffer com um caractere nulo
-//        flag = 0; // Reseta a flag
-//    }
+    GPIOPinConfigure(GPIO_PA0_U0RX);
+    GPIOPinConfigure(GPIO_PA1_U0TX);
+    GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
 
-}
+    UARTConfigSetExpClk(UART0_BASE, g_ui32SysClock, 115200, (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+
+    uint32_t t = 0; // Tempo em milissegundos
+    while (1) {
+        // Calcula o valor da senoide
+        float value = A * sin(2 * M_PI * F * (t / 1000.0)); // t em segundos
+        uint8_t sendValue = (uint8_t)(value + 128); // Centraliza em 0-255
+
+        // Envia o valor pela UART
+        UARTCharPut(UART0_BASE, sendValue);
+
+        // Espera pelo intervalo de amostragem
+        SysCtlDelay(g_ui32SysClock / SAMPLING_RATE);
+        t += (1000 / SAMPLING_RATE); // Incrementa o tempo 1000hz,
+    }
 }
