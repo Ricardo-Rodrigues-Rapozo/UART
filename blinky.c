@@ -72,19 +72,19 @@ while (1)
     //Um loop infinito que verifica se há caracteres disponíveis para leitura na UART.
     //Se houver, o caractere é recebido e imediatamente enviado de volta pela UART,
     //funcionando como um eco.
-    if (flag == 1) {
-        ptr = buffer; // Reseta o ponteiro para o início do buffer
-        for (int i = 0; i < 31; i++)
-        {
-            *ptr = UARTCharGet(UART0_BASE); // Lê um caractere da UART
-            if (*ptr == '\0') { // Se a leitura for nula, sai do loop
-                break; // Interrompe se encontrar o final que é a leitura do final de envio de dados
-            }
-            ptr++; // Move para a próxima posição no buffer
-        }
-        *ptr = '\0'; // Termina o buffer com um caractere nulo
-        flag = 0; // Reseta a flag
-    }
+//    if (flag == 1) {
+//        ptr = buffer; // Reseta o ponteiro para o início do buffer
+////        for (int i = 0; i < 31; i++)
+////        {
+////            *ptr = UARTCharGet(UART0_BASE); // Lê um caractere da UART
+////            if (*ptr == '\0') { // Se a leitura for nula, sai do loop
+////                break; // Interrompe se encontrar o final que é a leitura do final de envio de dados
+////            }
+////            ptr++; // Move para a próxima posição no buffer
+////        }
+//        *ptr = '\0'; // Termina o buffer com um caractere nulo
+//        flag = 0; // Reseta a flag
+//    }
 
 }
 }
