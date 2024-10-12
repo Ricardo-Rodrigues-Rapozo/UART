@@ -1,90 +1,105 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "inc/hw_memmap.h"
-#include "inc/hw_types.h"
-#include "driverlib/gpio.h"
-#include "driverlib/pin_map.h"
+#include "inc/hw_ints.h" // Incluindo cabe√ßalho para interrup√ß√µes
 #include "driverlib/sysctl.h"
+#include "driverlib/gpio.h"
+#include "driverlib/interrupt.h" // Incluindo cabe√ßalho para interrup√ß√µes
 #include "driverlib/uart.h"
-#include "inc/hw_ints.h"
-#include "driverlib/interrupt.h"
-//
-// -------------------------- Variaveis Globais ------------------------------------------------------
-//
-
-uint32_t ui32SysClkFreq;
-volatile uint32_t flag = 0; // Declare como volatile para indicar que pode mudar em interrupÁıes
-char buffer[32]; // Buffer para armazenar atÈ 32 caracteres
-char* ptr = buffer; // ptr aponta para o inÌcio do buffer
-int inteiro; // Declara uma vari·vel inteira
+#include "driverlib/pin_map.h"
 
 //
-// -------------------------- Uart interrupt ------------------------------------------------------
+//--------------------------------------- Manipulador de interrup√ß√£o da UART ---------------------------------------
 //
-void UARTIntHandler(void)// entra aqui quando recebe ou envia dados rx ou tx
-{
-flag = 1;
-uint32_t ui32Status;
-ui32Status = UARTIntStatus(UART0_BASE, true); //get interrupt status
-UARTIntClear(UART0_BASE, ui32Status); //clear the asserted interrupts
-while(UARTCharsAvail(UART0_BASE)) //loop while there are chars
-{
-UARTCharPutNonBlocking(UART0_BASE, UARTCharGetNonBlocking(UART0_BASE)); // echo
-}
-}
+//void UARTIntHandler(void)
+//{
+//}
 
-int main(void)
-{
-//
-// -------------------------- Definindo o CLK ------------------------------------------------------
-//
-ui32SysClkFreq = SysCtlClockFreqSet((SYSCTL_XTAL_25MHZ | SYSCTL_OSC_MAIN | SYSCTL_USE_PLL | SYSCTL_CFG_VCO_480), 120000000); // Variavel para armazenar a frequenci de clk do sistema
-//
-// -------------------------- Habilitando os perifericos ------------------------------------------------------
-//
-SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
-SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
-SysCtlPeripheralEnable(SYSCTL_PERIPH_GPION);
-//
-// -------------------------- ConfiguraÁıes do GPIO ------------------------------------------------------
-//
-GPIOPinTypeGPIOOutput(GPIO_PORTN_BASE, GPIO_PIN_0|GPIO_PIN_1);
-//
-// -------------------------- ConfiguraÁıes do GPIO para UART ------------------------------------------------------
-//
-GPIOPinConfigure(GPIO_PA0_U0RX);
-GPIOPinConfigure(GPIO_PA1_U0TX);
-GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
-//
-// -------------------------- ConfiguraÁ„o da UART ------------------------------------------------------
-//
-UARTConfigSetExpClk(UART0_BASE, ui32SysClkFreq, 115200,(UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
-IntMasterEnable();
-IntEnable(INT_UART0);
-UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT);
+/*
+Fun√ß√£o: UARTInit
+Descri√ß√£o:
+Esta fun√ß√£o inicializa a UART0 do microcontrolador.
+Ela habilita o clock para a UART, espera at√© que
+o m√≥dulo esteja pronto, e ent√£o configura os par√¢metros
+da UART, como a taxa de transmiss√£o, bits de dados,
+paridade e bits de parada.
+*/
+void UARTInit (void)
+    {
 
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0); // habilitando
 
-//
-// --------------------------   Loop Infinito para RecepÁ„o de Dados ------------------------------------------------------
-//
-while (1)
-{
-    //Um loop infinito que verifica se h· caracteres disponÌveis para leitura na UART.
-    //Se houver, o caractere È recebido e imediatamente enviado de volta pela UART,
-    //funcionando como um eco.
-    if (flag == 1) {
-        ptr = buffer; // Reseta o ponteiro para o inÌcio do buffer
-        for (int i = 0; i < 31; i++)
+    while(!SysCtlPeripheralReady(SYSCTL_PERIPH_UART0)) //espera o modulo UART0 estar pronto
         {
-            *ptr = UARTCharGet(UART0_BASE); // LÍ um caractere da UART
-            if (*ptr == '\0') { // Se a leitura for nula, sai do loop
-                break; // Interrompe se encontrar o final que È a leitura do final de envio de dados
-            }
-            ptr++; // Move para a prÛxima posiÁ„o no buffer
         }
-        *ptr = '\0'; // Termina o buffer com um caractere nulo
-        flag = 0; // Reseta a flag
+//
+// ---------------------------------- Ativa o m√≥dulo UART0 e GPIOA ----------------------------------------------
+//
+
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+    GPIOPinConfigure(GPIO_PA0_U0RX);// PA0 como RX
+    GPIOPinConfigure(GPIO_PA1_U0TX);// PA1 como TX
+    GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+//
+// ----------------------- Configurar a UART: 115200  bps, 8 bits, sem paridade, 1 stop bit --------------------------------
+//
+    UARTConfigSetExpClk(UART0_BASE, SysCtlClockGet(), 115200 ,
+                       (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+    IntMasterEnable();
+    IntEnable(INT_UART0);
+    UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT);
     }
 
+/*
+   Fun√ß√£o:
+   Descri√ß√£o:
+
+*/
+
+
+uint32_t receiveINT32 (void)
+    {
+    uint_fast16_t  i;
+    uint32_t receiveValInt = 0; // valor atualizado para receber o inteiro da UART
+    while(!UARTCharsAvail(UART0_BASE)) {}; //verifica a presen√ßa de caracteres na FIFO de recebimento da UART
+    for (i = 0; i < 4 ;i++) // 4 bytes de 8 bits
+        {
+        receiveValInt |= (UARTCharGet(UART0_BASE) << (i*8)); // recebe um dado desloca o bit LSB e muda os novos bits = 1
+        }
+    return receiveValInt;
+    }
+
+/*
+   Fun√ß√£o:
+   Descri√ß√£o:
+
+*/
+void SendInt32 (uint32_t ValInt)
+    {
+    uint_fast16_t  i1;
+    for (i1 =0; i1 < 4 ;i1++) // 4 bytes de 8 bits
+            {
+            UARTCharPut(UART0_BASE, (ValInt >> (i1*8))); // envia um dado desloca o bit LSB
+            }
+    }
+
+
+int main(void) {
+//
+//--------------------------------------- clk 120 MHz ------------------------------------------------------------------------------
+//
+SysCtlClockFreqSet((SYSCTL_XTAL_25MHZ | SYSCTL_OSC_MAIN | SYSCTL_USE_PLL | SYSCTL_CFG_VCO_240), 120000000);
+
+// -------------------------------------- INICIALIZA A UART -----------------------------------------------------
+UARTInit();
+
+// ------------------------------------- loop infinito ------------------------------------------------------------
+while(1)
+{
+    // Recebe um n√∫mero inteiro de 32 bits
+    uint32_t receivedValue = receiveINT32();
+
+    // Envia o valor recebido de volta
+    SendInt32(receivedValue);
 }
 }
