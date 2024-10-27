@@ -7,6 +7,8 @@
 #include "driverlib/pin_map.h"  // Necessário para configurar os pinos UART
 #include "inc/hw_memmap.h"
 #include "driverlib/adc.h"
+#include "inc/hw_types.h"
+#include "driverlib/timer.h"
 #include "inc/hw_ints.h"
 #include "driverlib/interrupt.h"
     //
@@ -14,8 +16,8 @@
     //
 #define SIZE_BUFFER 1000
 uint8_t SYNC_BYTE = 1;  // Sinal de sincronização esperado
-uint8_t flag = 0;
-uint32_t control1 = 10; // variavel para debug
+volatile uint8_t flag = 0;
+uint32_t control1 = 0; // variavel para debug
 uint32_t control2; // variavel para debug
 int buffer[SIZE_BUFFER];
 uint32_t ui32SysClkFreq;
@@ -71,13 +73,19 @@ void UARTInit(void) {
 }
 
 
+
 void sendINT32(int* buffer) {// Função para enviar 4 bytes via UART
     uint_fast16_t i;
     char* ptr = (char*)buffer;
-    for ( i = 0; i < SIZE_BUFFER*sizeof(int) ; i++) {
+    for ( i = 0; i < SIZE_BUFFER*sizeof(int) ; i++)
+    {
         UARTCharPut(UART0_BASE, ptr[i]);  // Envia cada byte
     }
 }
+
+
+
+
 
 int main(void) {
 //
@@ -97,15 +105,12 @@ int main(void) {
     {
         buffer[i] = i;
     }
-    control1 = 40;
-    while (1) {
-        control2 = 200;
+    while (1)
+    {
         if(flag == 1)
         {
             sendINT32(buffer);
             flag = 0;
         }
-
     }
-
 }
